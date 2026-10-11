@@ -1795,6 +1795,8 @@ public class HkPageActivity extends BaseActivity {
                 if (pos == RecyclerView.NO_POSITION || currentRule == null) return;
                 HkItem it = items.get(pos);
                 String mu = it.getUrl() == null ? "" : it.getUrl();
+                // 动作协议优先：@inputRule= 口令弹窗、toast:// 等；之前缺这行导致口令点了没反应
+                if (handleActionUrl(mu.trim(), it)) return;
                 // P1：hiker://page/ 子页面走 openPage，不进 V4
                 if (mu.trim().startsWith("hiker://page/") && openPage(it, mu)) return;
                 openDetail(it, !fromContent, mu.contains("@lazyRule="));
@@ -2285,13 +2287,15 @@ public class HkPageActivity extends BaseActivity {
         new Thread(() -> {
             String errMsg = null;
             String result = "";
+            boolean needRefresh = false;
             try {
                 HkJsRuntime rt = getRouter().getEngine().getJsRuntime();
                 // 官方语义：input 全局注入后直接求值。不用 evalLazy + 局部 var 包裹，
                 // 否则规则顶层语句在 return(...) 包裹下报语法错误，异常被静默吞掉导致"点了没反应"。
                 result = rt.eval(code, input);
-                // 取走 refreshPage 请求标记（不清零会污染后续 tab 点击的判断）
-                rt.consumeRefreshRequest();
+                // 取走 refreshPage 请求标记：规则（如口令正确时 setItem 后调 refreshPage）要求刷新，
+                // 必须在回调返回 toast:// 等动作后依然执行，否则页面不刷新（如星集口令正确却进不去）。
+                needRefresh = rt.consumeRefreshRequest();
                 String jsErr = rt.getError();
                 if (jsErr != null && !jsErr.isEmpty()) errMsg = jsErr;
             } catch (Throwable e) {
@@ -2301,6 +2305,7 @@ public class HkPageActivity extends BaseActivity {
             String r0 = result == null ? "" : result.trim();
             final String r = ("undefined".equals(r0) || "null".equals(r0)) ? "" : r0;
             final String em = errMsg;
+            final boolean refresh = needRefresh;
             App.post(() -> {
                 if (em != null && !em.isEmpty()) {
                     android.widget.Toast.makeText(HkPageActivity.this,
@@ -2312,7 +2317,11 @@ public class HkPageActivity extends BaseActivity {
                     HkItem nav = new HkItem();
                     nav.setTitle("");
                     nav.setUrl(r);
-                    if (handleActionUrl(r, nav)) return;
+                    if (handleActionUrl(r, nav)) {
+                        // toast:// 等动作已消费，但规则若请求了 refreshPage（如口令正确），仍需刷新列表
+                        if (refresh) loadContent(true);
+                        return;
+                    }
                     onContentItemClick(nav);
                     return;
                 }
