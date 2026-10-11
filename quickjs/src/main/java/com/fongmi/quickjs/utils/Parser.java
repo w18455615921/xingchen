@@ -36,7 +36,7 @@ public class Parser {
     public List<String> pdfa(String html, String rule) {
         Document doc = cache.getPdfa(html);
         rule = parseHikerToJq(rule, false);
-        String[] parses = rule.split(" ");
+        String[] parses = splitRespectingBrackets(rule);
         Elements elements = new Elements();
         for (String parse : parses) {
             elements = parseOneRule(doc, parse, elements);
@@ -60,7 +60,7 @@ public class Parser {
             rule = TextUtils.join("&&", excludes);
         }
         rule = parseHikerToJq(rule, true);
-        String[] parses = rule.split(" ");
+        String[] parses = splitRespectingBrackets(rule);
         Elements elements = new Elements();
         for (String parse : parses) {
             elements = parseOneRule(doc, parse, elements);
@@ -73,7 +73,7 @@ public class Parser {
     }
 
     public List<String> pdfl(String html, String rule, String texts, String urls, String urlKey) {
-        String[] parses = parseHikerToJq(rule, false).split(" ");
+        String[] parses = splitRespectingBrackets(parseHikerToJq(rule, false));
         Elements elements = new Elements();
         for (String parse : parses) {
             elements = parseOneRule(cache.getPdfa(html), parse, elements);
@@ -102,14 +102,14 @@ public class Parser {
 
     private String parseHikerToJq(String parse, boolean first) {
         if (!parse.contains("&&")) {
-            String[] split = parse.split(" ");
+            String[] split = splitRespectingBrackets(parse);
             if (!noAdd.matcher(split[split.length - 1]).find() && first) parse = parse + ":eq(0)";
             return parse;
         }
         String[] parses = parse.split("&&");
         List<String> items = new ArrayList<>();
         for (int i = 0; i < parses.length; i++) {
-            String[] split = parses[i].split(" ");
+            String[] split = splitRespectingBrackets(parses[i]);
             if (noAdd.matcher(split[split.length - 1]).find()) {
                 items.add(parses[i]);
             } else {
@@ -118,6 +118,43 @@ public class Parser {
             }
         }
         return TextUtils.join(" ", items);
+    }
+
+    /**
+     * 按空格切分选择器，但忽略 [...] 内和引号内的空格。
+     * 如 meta[itemprop="url mainEntityOfPage"] 不会被切错（8.83 官方语义：属性值可含空格）。
+     */
+    private String[] splitRespectingBrackets(String s) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        int bracketDepth = 0;
+        char quote = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (quote != 0) {
+                cur.append(c);
+                if (c == quote) quote = 0;
+            } else if (c == '"' || c == '\'') {
+                quote = c;
+                cur.append(c);
+            } else if (c == '[') {
+                bracketDepth++;
+                cur.append(c);
+            } else if (c == ']') {
+                if (bracketDepth > 0) bracketDepth--;
+                cur.append(c);
+            } else if (c == ' ' && bracketDepth == 0) {
+                if (cur.length() > 0) {
+                    parts.add(cur.toString());
+                    cur.setLength(0);
+                }
+            } else {
+                cur.append(c);
+            }
+        }
+        if (cur.length() > 0) parts.add(cur.toString());
+        if (parts.isEmpty()) parts.add(s);
+        return parts.toArray(new String[0]);
     }
 
     private Elements parseOneRule(Document doc, String parse, Elements elements) {

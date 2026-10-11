@@ -2922,12 +2922,18 @@ public class HkPageActivity extends BaseActivity {
             TextView tv = new TextView(ctx);
             tv.setText(titleSpan(item.getTitle()));
             tv.setTextColor(0xFF1A1D24);
-            tv.setTextSize(14);
+            tv.setTextSize(15);
             tv.setGravity(Gravity.CENTER);
-            tv.setMaxLines(3);
+            tv.setMaxLines(1);
+            tv.setLines(1);
             tv.setEllipsize(TextUtils.TruncateAt.END);
-            int pad = dp(8);
+            int pad = dp(5);
             tv.setPadding(pad, dp(10), pad, dp(10));
+            // 8.83 text_2~text_5 用 item_card_rect 系列布局，带 tab_item_default 底框（分类格子有框）
+            try {
+                tv.setBackgroundResource(R.drawable.tab_item_default);
+            } catch (Throwable ignored) {}
+            tv.setMinHeight(dp(40));
             h.cols.addView(tv, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             setContentClick(h, item);

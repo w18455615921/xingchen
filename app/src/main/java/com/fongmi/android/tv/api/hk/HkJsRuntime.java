@@ -1619,7 +1619,9 @@ public class HkJsRuntime implements HkSelector.JsEvaluator {
                 "      for (var _i = 1; _i < arguments.length; _i++) {\n" +
                 "        try { _a.push(JSON.stringify(arguments[_i])); } catch (_e) { _a.push('null'); }\n" +
                 "      }\n" +
-                "      return url + '@headers=' + _headersJson + '@js=(' + fn.toString() + ')(' + _a.join(',') + ');';\n" +
+                "      var _mt = '';\\n" +
+                "      try { _mt = (typeof MY_RULE !== 'undefined' && MY_RULE && MY_RULE.title) ? MY_RULE.title : ''; } catch (_mte) {}\\n" +
+                "      return url + '@headers=' + _headersJson + '@js=MY_TITLE=' + JSON.stringify(_mt) + ';(' + fn.toString() + ')(' + _a.join(',') + ');';\\n" +
                 "    },\n" +
                 "    confirm: function(fn) {\n" +
                 "      return url + '@confirmRule=js:(' + fn.toString() + ')();';\n" +
@@ -1642,11 +1644,151 @@ public class HkJsRuntime implements HkSelector.JsEvaluator {
                 "  }\n" +
                 "  return 'js:(' + fn.toString() + ')(' + args.join(',') + ');';\n" +
                 "};\n" +
-                "$.require = function(path) {\n" +
-                "  $.exports = {};\n" +
-                "  __hkRequirePage(path);\n" +
-                "  return $.exports;\n" +
-                "};\n" +
+                                "var $require = (function() {\n" +
+                "    var RequireUtils = com.example.hikerview.ui.rules.service.require.RequireUtils;\n" +
+                "    function Module(o) {\n" +
+                "        this.id = o.id;\n" +
+                "        this.exports = {};\n" +
+                "        this.importParam = o.importParam;\n" +
+                "        this.modulePath = o.modulePath;\n" +
+                "        this.headers = o.headers;\n" +
+                "        this.time = o.time;\n" +
+                "        this.code = o.code;\n" +
+                "    }\n" +
+                "    Module._cache = new Map();\n" +
+                "    Module._extensions = {\n" +
+                "        'json': function(module) {\n" +
+                "            var script = getScript(module).trim();\n" +
+                "            try {\n" +
+                "                module.exports = JSON.parse(script);\n" +
+                "            } catch (e) {\n" +
+                "                Module._extensions.js(module);\n" +
+                "            }\n" +
+                "        },\n" +
+                "        'js': function(module) {\n" +
+                "            var script = getScript(module);\n" +
+                "            var templateFn = new Function(\"module\", \"exports\", \"__filename\", script);\n" +
+                "            var exports = module.exports;\n" +
+                "            templateFn.call(exports, module, exports, module.id);\n" +
+                "        }\n" +
+                "    };\n" +
+                "    Module.prototype.load = function() {\n" +
+                "        var $temp = [$.exports, $.importParam];\n" +
+                "        var referee = this.exports;\n" +
+                "        $.exports = this.exports;\n" +
+                "        $.importParam = this.importParam;\n" +
+                "        var type = this.id.split(\"?\")[0];\n" +
+                "        if (type.endsWith(\".json\")) {\n" +
+                "            Module._extensions.json(this);\n" +
+                "        } else {\n" +
+                "            Module._extensions.js(this);\n" +
+                "        }\n" +
+                "        if ($.exports !== this.exports && referee === this.exports) {\n" +
+                "            this.exports = $.exports;\n" +
+                "        }\n" +
+                "        $.exports = $temp[0];\n" +
+                "        $.importParam = $temp[1];\n" +
+                "    };\n" +
+                "    function getScript(module) {\n" +
+                "        var code = \"\";\n" +
+                "        if (module.code !== void 0) return module.code;\n" +
+                "        if (module.id.startsWith(\"hiker://page/\")) {\n" +
+                "            var codeObject = request(module.id);\n" +
+                "            if (!codeObject) throw new Error('Module \"' + module.modulePath + '\" cannot be found.');\n" +
+                "            code = JSON.parse(codeObject).rule;\n" +
+                "        } else {\n" +
+                "            if (fileExist(module.id) || module.id.startsWith(\"hiker://assets/\")) {\n" +
+                "                if (module.time) {\n" +
+                "                    code = fetchCache(module.modulePath, module.time, module.headers);\n" +
+                "                } else {\n" +
+                "                    code = request(module.id);\n" +
+                "                }\n" +
+                "            } else if (module.modulePath.startsWith(\"http\")) {\n" +
+                "                code = request(module.modulePath, module.headers);\n" +
+                "                if (!isJsCode(code)) {\n" +
+                "                    throw new Error('failed to get module \"' + module.modulePath + '\" from the network!');\n" +
+                "                }\n" +
+                "                writeFile(module.id, code);\n" +
+                "            } else {\n" +
+                "                throw new Error('Module \"' + module.modulePath + '\" cannot be found.');\n" +
+                "            }\n" +
+                "            if (module.modulePath.startsWith(\"http\")) {\n" +
+                "                try {\n" +
+                "                    var title = \"\";\n" +
+                "                    if (typeof MY_RULE !== \"undefined\" && MY_RULE != null) {\n" +
+                "                        title = MY_RULE.title;\n" +
+                "                    } else if (typeof MY_TITLE !== \"undefined\") {\n" +
+                "                        title = MY_TITLE;\n" +
+                "                    }\n" +
+                "                    RequireUtils.generateRequireMap(title, module.modulePath, \"\", getPath(module.id).slice(7));\n" +
+                "                } catch (e) {}\n" +
+                "            }\n" +
+                "        }\n" +
+                "        if (code.startsWith(\"js:\")) {\n" +
+                "            code = code.slice(3);\n" +
+                "        }\n" +
+                "        return code;\n" +
+                "    }\n" +
+                "    function isJsCode(code) {\n" +
+                "        if (!code) return false;\n" +
+                "        code = code.trim();\n" +
+                "        var notJsCode1 = [\"<!DOCTYPE\", \"<html\", \"<?xml\"];\n" +
+                "        for (var s of notJsCode1) {\n" +
+                "            if (code.startsWith(s)) return false;\n" +
+                "        }\n" +
+                "        var notJsCode2 = [\"</html>\", \"</rss>\"];\n" +
+                "        for (var s of notJsCode2) {\n" +
+                "            if (code.endsWith(s)) return false;\n" +
+                "        }\n" +
+                "        var jsKey = [\"var \", \"let \", \"const \", \"this.\", \"function\", \"eval(\", \"call(\", \"eval (\", \"call (\", \" => \", \")=>\"];\n" +
+                "        for (var s of jsKey) {\n" +
+                "            if (code.includes(s)) return true;\n" +
+                "        }\n" +
+                "        return false;\n" +
+                "    }\n" +
+                "    function require(modulePath, importParam, headers, time) {\n" +
+                "        if (typeof headers === \"number\") {\n" +
+                "            time = headers;\n" +
+                "            headers = undefined;\n" +
+                "        }\n" +
+                "        modulePath = modulePath || \"\";\n" +
+                "        var absPathname = require.resolve(modulePath);\n" +
+                "        if (Module._cache.has(absPathname)) {\n" +
+                "            return Module._cache.get(absPathname).exports;\n" +
+                "        }\n" +
+                "        var module = new Module({id: absPathname, modulePath: modulePath, importParam: importParam, headers: headers, time: time});\n" +
+                "        module.load();\n" +
+                "        Module._cache.set(module.id, module);\n" +
+                "        return module.exports;\n" +
+                "    }\n" +
+                "    require.resolve = function(modulePath) {\n" +
+                "        if (modulePath.startsWith(\"../\") || modulePath.startsWith(\"./\")) {\n" +
+                "            return joinUrl(\"file:///files/data/\" + MY_RULE.title + \"/\", modulePath).replace(\"file:///\", \"hiker://\");\n" +
+                "        } else if (modulePath.startsWith(\"https://\") || modulePath.startsWith(\"http://\")) {\n" +
+                "            return \"hiker://files/libs/\" + md5(modulePath) + \".js\";\n" +
+                "        } else if (!modulePath.startsWith(\"hiker://\") && !modulePath.startsWith(\"file://\")) {\n" +
+                "            return \"hiker://page/\" + modulePath;\n" +
+                "        } else {\n" +
+                "            return modulePath;\n" +
+                "        }\n" +
+                "    };\n" +
+                "    require.cache = Module._cache;\n" +
+                "    require.eval = function(code, eid, importParam) {\n" +
+                "        eid = eid || md5(code);\n" +
+                "        if (Module._cache.has(eid)) {\n" +
+                "            return Module._cache.get(eid).exports;\n" +
+                "        }\n" +
+                "        var module = new Module({id: eid, importParam: importParam, code: code});\n" +
+                "        module.load();\n" +
+                "        Module._cache.set(module.id, module);\n" +
+                "        return module.exports;\n" +
+                "    };\n" +
+                "    return require;\n" +
+                "})();\n" +
+                "$.require = $require;\n" +
+                "$.exports = $.exports || {};\n" +
+                "$.importParam = $.importParam || null;\n" +
+                "\n"
                 "function Uint8Array(a) {\n" +
                 "  var r = [];\n" +
                 "  if (typeof a === 'number') { for (var i = 0; i < a; i++) r.push(0); }\n" +
