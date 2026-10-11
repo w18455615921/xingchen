@@ -1788,7 +1788,7 @@ public class HkJsRuntime implements HkSelector.JsEvaluator {
                 "$.require = $require;\n" +
                 "$.exports = $.exports || {};\n" +
                 "$.importParam = $.importParam || null;\n" +
-                "\n"
+                "\n" +
                 "function Uint8Array(a) {\n" +
                 "  var r = [];\n" +
                 "  if (typeof a === 'number') { for (var i = 0; i < a; i++) r.push(0); }\n" +
